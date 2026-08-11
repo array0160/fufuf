@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#efe2c5" />
+  <title>展品語音導覽</title>
+  <style>
+    :root {
+      --paper: #f3ead8;
+      --paper-2: #eadbbd;
+      --ink: #3d2a0f;
+      --line: rgba(74, 52, 24, .20);
+      --dark: rgba(60, 40, 12, .88);
+      --white: #fff;
+      --shadow: 0 6px 18px rgba(56, 38, 14, .10);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: var(--paper); }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background:
+        linear-gradient(rgba(247,241,227,.78), rgba(247,241,227,.78)),
+        url("bk.jpg") center / cover fixed;
+      min-height: 100vh;
+    }
+
+    button {
+      font: inherit;
+      color: inherit;
+    }
+
+    button:focus-visible {
+      outline: 4px solid #0a66ff;
+      outline-offset: 4px;
+    }
+
+    .app {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding:
+        max(24px, env(safe-area-inset-top))
+        20px
+        max(28px, env(safe-area-inset-bottom));
+    }
+
+    .screen[hidden] { display: none !important; }
+
+    .position {
+      margin: 8px 0 20px;
+      text-align: center;
+      font-size: clamp(2rem, 7vw, 3rem);
+      font-weight: 800;
+      letter-spacing: .02em;
+    }
+
+    .info-card,
+    .control,
+    .overview-item {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(250, 245, 233, .78);
+      box-shadow: var(--shadow);
+    }
+
+    .info-card {
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+
+    .era {
+      font-size: clamp(1.5rem, 5vw, 2.2rem);
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+
+    .title {
+      font-size: clamp(1.6rem, 5.5vw, 2.35rem);
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    /* 整個圖片區就是一顆真正的按鈕。
+       圖片只用 CSS background，不會成為 VoiceOver/TalkBack 的「圖片」焦點。 */
+    .describe-button {
+      width: 100%;
+      min-height: 330px;
+      border: 0;
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      margin: 0 0 18px;
+      background-position: center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+    }
+
+    .describe-button::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,.08);
+    }
+
+    .describe-label {
+      position: relative;
+      z-index: 1;
+      width: min(90%, 620px);
+      min-height: 165px;
+      border: 5px solid #fff;
+      border-radius: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 20px;
+      background: rgba(0,0,0,.18);
+      color: #fff;
+      text-align: center;
+      text-shadow: 0 2px 8px rgba(0,0,0,.55);
+      font-size: clamp(2rem, 7vw, 3rem);
+      font-weight: 900;
+    }
+
+    .speaker {
+      font-size: 1.1em;
+      line-height: 1;
+    }
+
+    .control {
+      width: 100%;
+      border: 1px solid var(--line);
+      min-height: 116px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      font-size: clamp(1.55rem, 5.5vw, 2.2rem);
+      font-weight: 800;
+      cursor: pointer;
+      margin-bottom: 18px;
+    }
+
+    .control .icon {
+      font-size: 1.3em;
+      line-height: 1;
+    }
+
+    .nav-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .nav-row .control {
+      margin: 0;
+      min-height: 130px;
+    }
+
+    .overview-button {
+      min-height: 108px;
+    }
+
+    .control[disabled] {
+      opacity: .45;
+      cursor: default;
+    }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0,0,0,0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    /* 展品總覽 */
+    .overview-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 4px 0 8px;
+    }
+
+    .back-button {
+      flex: 0 0 auto;
+      min-width: 90px;
+      min-height: 70px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(250,245,233,.78);
+      font-size: 1.8rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .overview-title {
+      flex: 1;
+      margin: 0;
+      text-align: center;
+      font-size: clamp(2rem, 7vw, 3rem);
+      font-weight: 900;
+    }
+
+    .overview-count {
+      text-align: center;
+      font-size: 1.35rem;
+      margin: 0 0 20px;
+    }
+
+    .overview-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 14px;
+    }
+
+    .overview-list li {
+      margin: 0;
+      padding: 0;
+    }
+
+    .overview-item {
+      width: 100%;
+      min-height: 116px;
+      padding: 20px 22px;
+      text-align: left;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .overview-item-main {
+      display: grid;
+      gap: 6px;
+    }
+
+    .overview-number {
+      font-size: 1.25rem;
+      font-weight: 900;
+    }
+
+    .overview-name {
+      font-size: clamp(1.35rem, 4.6vw, 1.8rem);
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .current-badge {
+      display: inline-block;
+      width: fit-content;
+      margin-top: 3px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: #9c7435;
+      color: white;
+      font-size: .95rem;
+      font-weight: 800;
+    }
+
+    .chevron {
+      flex: 0 0 auto;
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    @media (max-width: 420px) {
+      .app { padding-left: 14px; padding-right: 14px; }
+      .info-card { padding: 20px; }
+      .describe-button { min-height: 290px; }
+      .describe-label { min-height: 145px; border-width: 4px; }
+      .nav-row { gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <!-- 主展品畫面 -->
+    <section id="detailScreen" class="screen" aria-labelledby="positionText">
+      <h1 id="positionText" class="position">第 1 件，共 2 件</h1>
+
+      <section class="info-card" aria-labelledby="exhibitTitle">
+        <div id="exhibitEra" class="era">第一件展品</div>
+        <div id="exhibitTitle" class="title">歷史照片一</div>
+      </section>
+
+      <!-- 注意：
+           這裡沒有 <img>。
+           展品圖只作為 CSS 背景，因此 VoiceOver/TalkBack 不會額外朗讀「圖片」。
+           整個區塊本身是一顆真正的 button。 -->
+      <button
+        id="describeButton"
+        class="describe-button"
+        type="button"
+        aria-label="聽展品描述">
+        <span class="describe-label" aria-hidden="true">
+          <span class="speaker">🔊</span>
+          <span>聽展品描述</span>
+        </span>
+      </button>
+
+      <button
+        id="audioButton"
+        class="control"
+        type="button"
+        aria-label="播放歷史導覽">
+        <span class="icon" aria-hidden="true">▶</span>
+        <span id="audioButtonText">播放歷史導覽</span>
+      </button>
+
+      <div class="nav-row">
+        <button
+          id="prevButton"
+          class="control"
+          type="button"
+          aria-label="上一件">
+          <span aria-hidden="true">←</span>
+          <span>上一件</span>
+        </button>
+
+        <button
+          id="nextButton"
+          class="control"
+          type="button"
+          aria-label="下一件">
+          <span>下一件</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
+
+      <button
+        id="overviewButton"
+        class="control overview-button"
+        type="button"
+        aria-label="展品總覽，共 2 件">
+        <span aria-hidden="true">☰</span>
+        <span>展品總覽（共 2 件）</span>
+      </button>
+
+      <!-- 只給螢幕閱讀器的動態狀態區 -->
+      <div id="liveStatus" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+      <audio id="audioPlayer" preload="metadata"></audio>
+    </section>
+
+    <!-- 展品總覽 -->
+    <section id="overviewScreen" class="screen" hidden aria-labelledby="overviewHeading">
+      <div class="overview-header">
+        <button id="backButton" class="back-button" type="button" aria-label="返回目前展品">←</button>
+        <h1 id="overviewHeading" class="overview-title">展品總覽</h1>
+      </div>
+
+      <p id="overviewCount" class="overview-count">共 2 件</p>
+
+      <ul id="overviewList" class="overview-list"></ul>
+    </section>
+  </main>
+
+  <script>
+    // === 展品資料 ===
+    // 之後只要換這裡的文字、圖片與 MP3 檔名即可。
+    const exhibits = [
+      {
+        era: "第一件展品",
+        title: "歷史照片一",
+        image: "p1.jpg",
+        audio: "p1.mp3",
+        description:
+          "黑白歷史照片。畫面從較高處俯瞰一大片平坦地景，近處可見數個大型矩形與橢圓形水池，周圍有道路與樹木；更遠處是大片田野與水道，地平線附近可見低矮山丘。"
+      },
+      {
+        era: "第二件展品",
+        title: "歷史照片二",
+        image: "p2.jpg",
+        audio: "p2.mp3",
+        description:
+          "黑白歷史照片。畫面中央是一座大型圓形道路，中間正在施工，工區內有多部工程機具；道路上有汽車行駛。畫面上方可見道路與橋梁延伸到水岸，左右兩側有多層建築與街屋。"
+      }
+    ];
+
+    let currentIndex = 0;
+    let returnFocusTo = null;
+
+    const detailScreen = document.getElementById("detailScreen");
+    const overviewScreen = document.getElementById("overviewScreen");
+
+    const positionText = document.getElementById("positionText");
+    const exhibitEra = document.getElementById("exhibitEra");
+    const exhibitTitle = document.getElementById("exhibitTitle");
+    const describeButton = document.getElementById("describeButton");
+    const audioButton = document.getElementById("audioButton");
+    const audioButtonText = document.getElementById("audioButtonText");
+    const prevButton = document.getElementById("prevButton");
+    const nextButton = document.getElementById("nextButton");
+    const overviewButton = document.getElementById("overviewButton");
+    const liveStatus = document.getElementById("liveStatus");
+    const audioPlayer = document.getElementById("audioPlayer");
+
+    const overviewHeading = document.getElementById("overviewHeading");
+    const overviewCount = document.getElementById("overviewCount");
+    const overviewList = document.getElementById("overviewList");
+    const backButton = document.getElementById("backButton");
+
+    function announce(message) {
+      liveStatus.textContent = "";
+      window.setTimeout(() => {
+        liveStatus.textContent = message;
+      }, 40);
+    }
+
+    function stopAudio() {
+      audioPlayer.pause();
+      audioPlayer.currentTime = 0;
+      updateAudioButton(false);
+    }
+
+    function updateAudioButton(isPlaying) {
+      if (isPlaying) {
+        audioButton.setAttribute("aria-label", "暫停歷史導覽");
+        audioButtonText.textContent = "暫停歷史導覽";
+        audioButton.querySelector(".icon").textContent = "⏸";
+      } else {
+        audioButton.setAttribute("aria-label", "播放歷史導覽");
+        audioButtonText.textContent = "播放歷史導覽";
+        audioButton.querySelector(".icon").textContent = "▶";
+      }
+    }
+
+    function renderExhibit({ announceChange = false } = {}) {
+      const exhibit = exhibits[currentIndex];
+
+      positionText.textContent = `第 ${currentIndex + 1} 件，共 ${exhibits.length} 件`;
+      exhibitEra.textContent = exhibit.era;
+      exhibitTitle.textContent = exhibit.title;
+
+      // 圖片只做 CSS 背景，不建立 img 節點。
+      describeButton.style.backgroundImage = `url("${exhibit.image}")`;
+
+      audioPlayer.src = exhibit.audio;
+      updateAudioButton(false);
+
+      prevButton.disabled = currentIndex === 0;
+      nextButton.disabled = currentIndex === exhibits.length - 1;
+
+      overviewButton.setAttribute(
+        "aria-label",
+        `展品總覽，共 ${exhibits.length} 件`
+      );
+      overviewButton.querySelector("span:last-child").textContent =
+        `展品總覽（共 ${exhibits.length} 件）`;
+
+      if (announceChange) {
+        announce(
+          `第 ${currentIndex + 1} 件，共 ${exhibits.length} 件，${exhibit.title}`
+        );
+      }
+    }
+
+    function renderOverview() {
+      overviewCount.textContent = `共 ${exhibits.length} 件`;
+      overviewList.innerHTML = "";
+
+      exhibits.forEach((exhibit, index) => {
+        const listItem = document.createElement("li");
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "overview-item";
+
+        const isCurrent = index === currentIndex;
+        if (isCurrent) item.setAttribute("aria-current", "true");
+        const accessibleName =
+          `第 ${index + 1} 件，${exhibit.title}` +
+          (isCurrent ? "，目前展品" : "");
+
+        item.setAttribute("aria-label", accessibleName);
+
+        const main = document.createElement("span");
+        main.className = "overview-item-main";
+        main.setAttribute("aria-hidden", "true");
+
+        const number = document.createElement("span");
+        number.className = "overview-number";
+        number.textContent = `第 ${index + 1} 件`;
+
+        const name = document.createElement("span");
+        name.className = "overview-name";
+        name.textContent = exhibit.title;
+
+        main.append(number, name);
+
+        if (isCurrent) {
+          const badge = document.createElement("span");
+          badge.className = "current-badge";
+          badge.textContent = "目前展品";
+          main.appendChild(badge);
+        }
+
+        const chevron = document.createElement("span");
+        chevron.className = "chevron";
+        chevron.setAttribute("aria-hidden", "true");
+        chevron.textContent = "›";
+
+        item.append(main, chevron);
+
+        item.addEventListener("click", () => {
+          currentIndex = index;
+          stopAudio();
+          renderExhibit();
+
+          overviewScreen.hidden = true;
+          detailScreen.hidden = false;
+
+          // 回到主畫面後，把焦點放在「第幾件」標題，
+          // 並用 aria-live 宣布目前展品。
+          positionText.setAttribute("tabindex", "-1");
+          positionText.focus({ preventScroll: false });
+          positionText.removeAttribute("tabindex");
+
+          announce(
+            `第 ${currentIndex + 1} 件，共 ${exhibits.length} 件，${exhibits[currentIndex].title}`
+          );
+        });
+
+        listItem.appendChild(item);
+        overviewList.appendChild(listItem);
+      });
+    }
+
+    describeButton.addEventListener("click", () => {
+      stopAudio();
+      const exhibit = exhibits[currentIndex];
+      announce(`展品描述。${exhibit.description}`);
+    });
+
+    audioButton.addEventListener("click", async () => {
+      if (audioPlayer.paused) {
+        try {
+          await audioPlayer.play();
+          updateAudioButton(true);
+          announce("開始播放歷史導覽");
+        } catch (error) {
+          announce("目前無法播放歷史導覽，請稍後再試");
+        }
+      } else {
+        audioPlayer.pause();
+        updateAudioButton(false);
+        announce("歷史導覽已暫停");
+      }
+    });
+
+    audioPlayer.addEventListener("ended", () => {
+      updateAudioButton(false);
+      announce("歷史導覽播放完畢");
+    });
+
+    prevButton.addEventListener("click", () => {
+      if (currentIndex <= 0) return;
+      stopAudio();
+      currentIndex -= 1;
+      renderExhibit({ announceChange: true });
+    });
+
+    nextButton.addEventListener("click", () => {
+      if (currentIndex >= exhibits.length - 1) return;
+      stopAudio();
+      currentIndex += 1;
+      renderExhibit({ announceChange: true });
+    });
+
+    overviewButton.addEventListener("click", () => {
+      returnFocusTo = overviewButton;
+      stopAudio();
+      renderOverview();
+
+      detailScreen.hidden = true;
+      overviewScreen.hidden = false;
+
+      // 進總覽時只聚焦標題，不會一次把全部展品念完。
+      overviewHeading.setAttribute("tabindex", "-1");
+      overviewHeading.focus({ preventScroll: false });
+      overviewHeading.removeAttribute("tabindex");
+    });
+
+    backButton.addEventListener("click", () => {
+      overviewScreen.hidden = true;
+      detailScreen.hidden = false;
+      renderExhibit();
+
+      if (returnFocusTo) {
+        returnFocusTo.focus();
+      }
+    });
+
+    // 初始
+    renderExhibit();
+  </script>
+</body>
+</html>
